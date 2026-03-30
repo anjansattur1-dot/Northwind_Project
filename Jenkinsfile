@@ -15,7 +15,7 @@ pipeline {
     }
 
     environment {
-        SPARK_SUBMIT = '/home/ec2-user/.local/bin/spark-submit'
+        SPARK_SUBMIT = '/usr/bin/spark-submit'
         HDFS_BASE = '/tmp/anjan_project'
     }
 
@@ -42,7 +42,7 @@ pipeline {
                 sh '''
                     echo "=== FULL LOAD STARTED ==="
 
-                    ${SPARK_SUBMIT} --master yarn Full_Load_CSV_JAR.py
+                    ${SPARK_SUBMIT} --master yarn --jars postgresql-42.7.10.jar Full_Load_CSV_JAR.py
                     ${SPARK_SUBMIT} --master yarn silver_proj.py
 
                     echo "=== FULL LOAD COMPLETED ==="
