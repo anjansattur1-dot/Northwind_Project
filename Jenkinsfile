@@ -15,7 +15,7 @@ pipeline {
     }
 
     environment {
-        SPARK_SUBMIT = '/usr/bin/spark-submit'
+        SPARK_SUBMIT = '/home/ec2-user/.local/bin/spark-submit'
         HDFS_BASE = '/tmp/anjan_project'
     }
 
