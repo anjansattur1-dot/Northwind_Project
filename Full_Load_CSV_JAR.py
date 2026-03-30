@@ -1,7 +1,7 @@
 
 #importing libraries
 from pyspark.sql import SparkSession
-import logger_util import setup_logger
+from logger_util import setup_logger
 
 logger = setup_logger("full_load_csv_jar")
 # spark session
