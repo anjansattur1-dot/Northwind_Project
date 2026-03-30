@@ -76,6 +76,7 @@ pipeline {
                         Full_Load_CSV_JAR.py \
                         silver_proj.py \
                         silver_to_gold.py \
+                        logger_util.py \
                         kafka_prod_orders_stream.py \
                         kafka_consumer_order_stream.py \
                         orders_stream_bronze_to_silver.py \
@@ -94,6 +95,7 @@ pipeline {
                     echo "=== RUNNING FULL LOAD ==="
 
                     ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
+                        set -e
                         cd ${REMOTE_DIR}
 
                         export HADOOP_CONF_DIR=/etc/hadoop/conf
@@ -105,18 +107,21 @@ pipeline {
                           --master yarn \
                           --deploy-mode client \
                           --jars ${REMOTE_DIR}/${JDBC_JAR} \
+                          --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/Full_Load_CSV_JAR.py
 
                         echo '--- Silver Cleaning ---'
                         spark-submit \
                           --master yarn \
                           --deploy-mode client \
+                          --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/silver_proj.py
 
                         echo '--- Gold / Hive Transformation ---'
                         spark-submit \
                           --master yarn \
                           --deploy-mode client \
+                          --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/silver_to_gold.py
                     "
                 '''
@@ -132,6 +137,7 @@ pipeline {
                     echo "=== RUNNING INCREMENTAL LOAD ==="
 
                     ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
+                        set -e
                         cd ${REMOTE_DIR}
 
                         export HADOOP_CONF_DIR=/etc/hadoop/conf
@@ -146,18 +152,21 @@ pipeline {
                         spark-submit \
                           --master yarn \
                           --deploy-mode client \
+                          --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/kafka_consumer_order_stream.py
 
                         echo '--- Bronze to Silver for Streamed Orders ---'
                         spark-submit \
                           --master yarn \
                           --deploy-mode client \
+                          --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/orders_stream_bronze_to_silver.py
 
                         echo '--- Loading Stream Output to Hive / Impala ---'
                         spark-submit \
                           --master yarn \
                           --deploy-mode client \
+                          --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/orders_stream_hive.py
                     "
                 '''
