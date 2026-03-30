@@ -14,6 +14,11 @@ pipeline {
         timestamps()
     }
 
+    environment {
+        SPARK_SUBMIT = '/home/ec2-user/.local/bin/spark-submit'
+        HDFS_BASE = '/tmp/anjan_project'
+    }
+
     stages {
 
         stage('Verify Workspace') {
@@ -22,6 +27,9 @@ pipeline {
                     echo "=== VERIFY WORKSPACE ==="
                     pwd
                     ls -la
+
+                    echo "Checking Spark:"
+                    ${SPARK_SUBMIT} --version || true
                 '''
             }
         }
@@ -34,8 +42,8 @@ pipeline {
                 sh '''
                     echo "=== FULL LOAD STARTED ==="
 
-                    spark-submit --master yarn Full_Load_CSV_JAR.py
-                    spark-submit --master yarn silver_proj.py
+                    ${SPARK_SUBMIT} --master yarn Full_Load_CSV_JAR.py
+                    ${SPARK_SUBMIT} --master yarn silver_proj.py
 
                     echo "=== FULL LOAD COMPLETED ==="
                 '''
@@ -53,9 +61,9 @@ pipeline {
                     nohup python3 kafka_prod_orders_stream.py > kafka_producer.log 2>&1 &
                     sleep 10
 
-                    spark-submit --master yarn kafka_consumer_order_stream.py
-                    spark-submit --master yarn orders_stream_bronze_to_silver.py
-                    spark-submit --master yarn orders_stream_hive.py
+                    ${SPARK_SUBMIT} --master yarn kafka_consumer_order_stream.py
+                    ${SPARK_SUBMIT} --master yarn orders_stream_bronze_to_silver.py
+                    ${SPARK_SUBMIT} --master yarn orders_stream_hive.py
 
                     echo "=== INCREMENTAL LOAD COMPLETED ==="
                 '''
@@ -66,10 +74,10 @@ pipeline {
             steps {
                 sh '''
                     echo "=== VALIDATING HDFS ==="
-                    hdfs dfs -ls /tmp/anjan_project/bronze || true
-                    hdfs dfs -ls /tmp/anjan_project/silver || true
-                    hdfs dfs -ls /tmp/anjan_project/bronze/order_stream || true
-                    hdfs dfs -ls /tmp/anjan_project/silver/order_stream || true
+                    hdfs dfs -ls ${HDFS_BASE}/bronze || true
+                    hdfs dfs -ls ${HDFS_BASE}/silver || true
+                    hdfs dfs -ls ${HDFS_BASE}/bronze/order_stream || true
+                    hdfs dfs -ls ${HDFS_BASE}/silver/order_stream || true
                 '''
             }
         }
