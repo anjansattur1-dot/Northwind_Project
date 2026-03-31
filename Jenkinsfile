@@ -97,7 +97,7 @@ pipeline {
                         ${CLOUDERA_HOST}:${REMOTE_DIR}/
 
                     scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
-                        tests/test_floadtest.py \
+                        tests/floadtest.py \
                         tests/test_cleaning.py \
                         tests/test_transformation.py \
                         ${CLOUDERA_HOST}:${REMOTE_DIR}/tests/
@@ -133,7 +133,7 @@ pipeline {
                         set -e
                         cd ${REMOTE_DIR}
 
-                        ${PYTHON_BIN} -m pytest -v tests/test_floadtest.py
+                        ${PYTHON_BIN} -m pytest -v tests/floadtest.py
                         ${PYTHON_BIN} -m pytest -v tests/test_cleaning.py
                         ${PYTHON_BIN} -m pytest -v tests/test_transformation.py
                     "
