@@ -1,5 +1,6 @@
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, sum as spark_sum
 
 @pytest.fixture(scope="session")
 def spark():
