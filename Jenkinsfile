@@ -14,6 +14,7 @@ pipeline {
         SSH_KEY       = '/var/lib/jenkins/.ssh/id_rsa'
         REMOTE_DIR    = '/tmp/anjan_northwind_pipeline'
         PYTHON_BIN    = 'python3'
+        PIP_BIN       = 'pip3'
         JDBC_JAR      = 'postgresql-42.7.10.jar'
     }
 
@@ -24,12 +25,20 @@ pipeline {
 
     stages {
 
+        stage('Checkout Source') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Validate Jenkins Workspace') {
             steps {
                 sh '''
                     echo "=== JENKINS WORKSPACE ==="
                     pwd
                     ls -la
+                    echo "=== TEST FILES ==="
+                    ls -la tests || true
                 '''
             }
         }
@@ -41,6 +50,8 @@ pipeline {
                     ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
                         echo 'Hostname:' && hostname
                         echo 'Spark:' && which spark-submit
+                        echo 'Python:' && which ${PYTHON_BIN}
+                        echo 'Pip:' && which ${PIP_BIN}
                         echo 'YARN nodes:' && HADOOP_CONF_DIR=/etc/hadoop/conf yarn node -list 2>&1 | grep -E 'Total|RUNNING'
                         echo 'HDFS report:' && hdfs dfsadmin -report 2>&1 | grep -E 'Configured|DFS Remaining'
                     "
@@ -56,7 +67,10 @@ pipeline {
                     rm -f ${JDBC_JAR}
                     wget https://jdbc.postgresql.org/download/postgresql-42.7.10.jar -O ${JDBC_JAR}
 
-                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "mkdir -p ${REMOTE_DIR}"
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
+                        rm -rf ${REMOTE_DIR}
+                        mkdir -p ${REMOTE_DIR}/tests
+                    "
 
                     scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
                         ${JDBC_JAR} \
@@ -65,12 +79,10 @@ pipeline {
             }
         }
 
-        stage('Copy Project Scripts to Cluster') {
+        stage('Copy Project Scripts and Tests to Cluster') {
             steps {
                 sh '''
                     echo "=== COPYING PROJECT FILES TO CLUSTER ==="
-
-                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "mkdir -p ${REMOTE_DIR}"
 
                     scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
                         Full_Load_CSV_JAR.py \
@@ -81,7 +93,50 @@ pipeline {
                         kafka_consumer_order_stream.py \
                         orders_stream_bronze_to_silver.py \
                         orders_stream_hive.py \
+                        requirements.txt \
                         ${CLOUDERA_HOST}:${REMOTE_DIR}/
+
+                    scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
+                        tests/test_fload.py \
+                        tests/test_cleaning.py \
+                        tests/test_transformation.py \
+                        ${CLOUDERA_HOST}:${REMOTE_DIR}/tests/
+                '''
+            }
+        }
+
+        stage('Install Python Dependencies') {
+            steps {
+                sh '''
+                    echo "=== INSTALLING PYTHON DEPENDENCIES ==="
+
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
+                        set -e
+                        cd ${REMOTE_DIR}
+
+                        ${PYTHON_BIN} -m pip install --upgrade pip
+                        ${PYTHON_BIN} -m pip install pytest pyspark
+                    "
+                '''
+            }
+        }
+
+        stage('Run Pytests') {
+            when {
+                expression { params.RUN_MODE == 'FULL_LOAD' }
+            }
+            steps {
+                sh '''
+                    echo "=== RUNNING PYTESTS FIRST ==="
+
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
+                        set -e
+                        cd ${REMOTE_DIR}
+
+                        ${PYTHON_BIN} -m pytest -v tests/test_fload.py
+                        ${PYTHON_BIN} -m pytest -v tests/test_cleaning.py
+                        ${PYTHON_BIN} -m pytest -v tests/test_transformation.py
+                    "
                 '''
             }
         }
@@ -117,7 +172,7 @@ pipeline {
                           --py-files ${REMOTE_DIR}/logger_util.py \
                           ${REMOTE_DIR}/silver_proj.py
 
-                        echo '--- Gold / Hive Transformation ---'
+                        echo '--- Gold Transformation ---'
                         spark-submit \
                           --master yarn \
                           --deploy-mode client \
@@ -181,8 +236,8 @@ pipeline {
                     ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${CLOUDERA_HOST} "
                         hdfs dfs -ls /tmp/anjan_project/bronze || true
                         hdfs dfs -ls /tmp/anjan_project/silver || true
-                        hdfs dfs -ls /tmp/anjan_project/bronze/order_stream || true
-                        hdfs dfs -ls /tmp/anjan_project/silver/order_stream || true
+                        hdfs dfs -ls /tmp/anjan_project/bronze/orders_stream || true
+                        hdfs dfs -ls /tmp/anjan_project/silver/orders_stream || true
                     "
                 '''
             }
@@ -230,10 +285,10 @@ pipeline {
 
     post {
         success {
-            echo 'ETL pipeline completed successfully.'
+            echo 'Pytests passed and ETL pipeline completed successfully.'
         }
         failure {
-            echo 'Pipeline failed. Check console output.'
+            echo 'Pipeline failed. Check pytest, Spark, and Jenkins console logs.'
         }
     }
 }
