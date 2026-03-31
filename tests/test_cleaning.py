@@ -1,5 +1,7 @@
 import pytest
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, trim
+from pyspark.sql.types import IntegerType
 
 @pytest.fixture(scope="session")
 def spark():
